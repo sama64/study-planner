@@ -438,35 +438,38 @@ function createCoursesStore() {
 function createSelectedCoursesStore() {
   const { subscribe, set, update } = writable([]);
 
+  const createTermId = (year, term) => `${year}C${term}`;
+
   return {
     subscribe,
-    addCourse: (course) => {
-      update(courses => {
-        // Make sure course is added only once
-        const existingCourse = courses.find(c => c.id === course.id);
-        if (existingCourse) return courses;
+    addCourse: (course, year, term) => update(courses => {
+      const existingCourse = courses.find(c => c.id === course.id);
 
-        return [...courses, {
-          ...course,
-          approved: false, // Initialize all courses as not approved
-          year: course.year,
-          term: course.term,
-          termId: `${course.year}C${course.term}` // Add termId for easier filtering later
-        }];
-      });
-    },
-    removeCourse: (courseId) => {
-      update(courses => courses.filter(c => c.id !== courseId));
-    },
-    toggleApproved: (courseId) => {
-      update(courses =>
-        courses.map(c =>
-          c.id === courseId
-            ? { ...c, approved: !c.approved }
+      if (existingCourse) {
+        console.log(`Updating existing course: ${year} C${term}`);
+        return courses.map(c =>
+          c.id === course.id
+            ? { ...c, ...course, termId: createTermId(year, term), year: year, term: term }
             : c
-        )
-      );
-    },
+        );
+      }
+
+      console.log('Adding new course:', course);
+      return [...courses, {
+        ...course,
+        approved: false,
+        termId: createTermId(course.year, course.term)
+      }];
+    }),
+
+    // removeCourse: (courseId) =>
+    //   update(courses => courses.filter(c => c.id !== courseId)),
+
+    toggleApproved: (courseId) =>
+      update(courses => courses.map(c =>
+        c.id === courseId ? { ...c, approved: !c.approved } : c
+      )),
+
     reset: () => set([])
   };
 }

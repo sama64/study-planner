@@ -76,7 +76,8 @@
       </div>
     {/if}
 
-    {#if onRemove}
+    <!-- {#if onRemove} -->
+     {#if false}
       <div class="card-actions justify-end mt-2">
         <button 
           class="btn btn-xs btn-error btn-outline hover:scale-105 transition-transform"
