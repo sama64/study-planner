@@ -1,7 +1,7 @@
 <script>
   import { createEventDispatcher } from 'svelte';
   import CourseCard from './CourseCard.svelte';
-  import { validatePrerequisites, checkScheduleConflict } from '$lib/stores/courses';
+  import { validatePrerequisites, checkScheduleConflict } from '$lib/stores/classes';
   
   export let year;
   export let term;

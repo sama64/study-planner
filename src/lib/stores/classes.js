@@ -1,7 +1,7 @@
 import { writable, derived } from 'svelte/store';
 
 // Sample course data with more structured information
-const rawCourses = [
+const rawStudyPlan = [
   {
     id: 1,
     name: "Medios de Representación Gráfica I",
@@ -426,11 +426,11 @@ const rawCourses = [
 
 // This store holds all available courses
 function createCoursesStore() {
-  const { subscribe, set, update } = writable(rawCourses);
+  const { subscribe, set, update } = writable(rawStudyPlan);
 
   return {
     subscribe,
-    reset: () => set(rawCourses)
+    reset: () => set(rawStudyPlan)
   };
 }
 
@@ -458,7 +458,11 @@ function createSelectedCoursesStore() {
       return [...courses, {
         ...course,
         approved: false,
-        termId: createTermId(course.year, course.term)
+        termId: createTermId(course.year, course.term),
+        selectedSchedule: { days: [], time: '' },
+        lockedSchedule: false,
+        lockedTerm: false,
+        preferredTime: 'day'
       }];
     }),
 
@@ -475,16 +479,16 @@ function createSelectedCoursesStore() {
 }
 
 // Create stores
-export const courses = createCoursesStore();
-export const selectedCourses = createSelectedCoursesStore();
+// export const classes = createCoursesStore();
+export const classes = createSelectedCoursesStore();
 
-// Add all courses to selectedCourses by default (without a term initially)
-rawCourses.forEach(course => {
-  selectedCourses.addCourse(course); // Add all courses as selected, without assigning a term here
+// Add all classes to selectedCourses by default (without a term initially)
+rawStudyPlan.forEach(course => {
+  classes.addCourse(course); // Add all courses as selected, without assigning a term here
 });
 
 // Enhanced stats store, reflecting the selected courses
-export const stats = derived(selectedCourses, $selectedCourses => ({
+export const stats = derived(classes, $selectedCourses => ({
   totalCourses: $selectedCourses.length,
   totalApproved: $selectedCourses.filter(c => c.approved).length,
   hoursPerTerm: $selectedCourses.reduce((acc, course) => {
@@ -514,7 +518,7 @@ export function checkScheduleConflict(course1, course2) {
 
   const daysOverlap = course1.scheduleOptions.some(option =>
     course2.scheduleOptions.some(otherOption =>
-      otherOption.days.some(day => option.days.includes(day))
+      otherOption.days.some(day => optcion.days.includes(day))
     )
   );
 
@@ -525,10 +529,10 @@ export function checkScheduleConflict(course1, course2) {
   );
 }
 
-// Map correlatives IDs to course names
-export const courseLookup = derived(courses, ($courses) => {
+// Map correlatives IDs to class names
+export const classLookup = derived(classes, ($classes) => {
   const lookup = {};
-  $courses.forEach((course) => {
+  $classes.forEach((course) => {
     lookup[course.id] = course.name;
   });
   return lookup;

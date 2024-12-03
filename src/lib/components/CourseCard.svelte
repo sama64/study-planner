@@ -3,7 +3,7 @@
   export let isDraggable = true;
   export let onRemove = undefined;
   export let onToggleApproved = undefined;
-  import { courseLookup } from "$lib/stores/courses";
+  import { classLookup } from "$lib/stores/classes";
   import { get } from "svelte/store";
 
   function handleDragStart(event) {
@@ -17,8 +17,8 @@
   }
 
   // Function to map IDs to names
-  const getCourseNames = (ids) => {
-    const lookup = get(courseLookup);
+  const getClassNames = (ids) => {
+    const lookup = get(classLookup);
     return ids.map(id => lookup[id] || "Unknown").join(", ");
   };
 </script>
@@ -60,9 +60,9 @@
     
     <div class="flex flex-wrap gap-2 text-xs opacity-70">
       <span class="badge badge-neutral">{course.hours}hs</span>
-      {#if course.schedule}
+      {#if course.selectedSchedule !== {}}
         <span class="badge badge-ghost">
-          {course.schedule.days.join('/')} - {course.schedule.timeSlot}
+          {course.selectedSchedule.days.join('/')} - {course.selectedSchedule.timeSlot}
         </span>
       {/if}
     </div>
@@ -71,7 +71,7 @@
       <div class="text-xs">
         <span class="badge badge-warning badge-sm">
           <!-- Prereq: {course.correlatives.join(', ')} -->
-          Prereq: {getCourseNames(course.correlatives)}
+          Prereq: {getClassNames(course.correlatives)}
         </span>
       </div>
     {/if}

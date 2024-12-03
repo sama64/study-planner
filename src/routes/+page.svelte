@@ -1,15 +1,31 @@
 <script>
-  import { courses, selectedCourses, stats } from '$lib/stores/courses';
   import CourseCard from '$lib/components/CourseCard.svelte';
   import DropZone from '$lib/components/DropZone.svelte';
-  
+  import ScheduleSelector from '$lib/components/ScheduleSelector.svelte';
+  import IntensitySelector from '$lib/components/IntensitySelector.svelte';
+  import { classes, stats } from '$lib/stores/classes';
+  import { optimizeCourseSchedule } from '$lib/utils/courseScheduler';
+
   let currentYear = new Date().getFullYear();
-  let years = Array.from({length: 5}, (_, i) => currentYear + i);
-  let terms = [1, 2];
+  let currentTerm = new Date().getMonth() < 6 ? 1 : 2;
+
+  // Generate the year-term list
+  let totalEntries = 10; // Number of entries to display
+  let yearTermList = [];
+
+  for (let i = 0; i < totalEntries; i++) {
+    yearTermList.push({ year: currentYear, term: currentTerm });
+    currentTerm++;
+    if (currentTerm > 2) { // Reset term and increment year
+      currentTerm = 1;
+      currentYear++;
+    }
+  }
+
   let error = '';
   
   function handleDrop(course, year, term) {
-    selectedCourses.addCourse(course, year, term);
+    classes.addCourse(course, year, term);
   }
 
   function handleError(event) {
@@ -19,19 +35,33 @@
     }, 3000);
   }
 
+  function handleOptimizeSchedule() {
+    try {
+      const coursesArray = Array.from($classes);
+      const optimizedSchedule = optimizeCourseSchedule(coursesArray);
+    
+      // Update your classes store with the optimized schedule
+      optimizedSchedule.forEach(course => {
+        classes.addCourse(course, course.year, course.term);
+      });
+    } catch (error) {
+      console.error('Schedule optimization failed:', error);
+    }
+  }
+
   $: getCoursesForTerm = (year, term) => 
-    $selectedCourses.filter(c => c.year === year && c.term === term);
+    $classes.filter(c => c.year === year && c.term === term && c.approved === false);
 </script>
 
 <div class="container mx-auto p-4 space-y-6">
   <div class="navbar bg-base-100 rounded-box shadow">
     <div class="flex-1">
-      <h1 class="text-2xl font-bold">Course Planner</h1>
+      <h1 class="text-2xl font-bold">Study Planner</h1>
     </div>
     <div class="flex-none">
       <div class="stats shadow">
         <div class="stat px-4">
-          <div class="stat-title">Approved</div>
+          <div class="stat-title">Passed</div>
           <div class="stat-value text-success text-2xl">
             {$stats.totalApproved}/{$stats.totalCourses}
           </div>
@@ -57,10 +87,10 @@
           <h2 class="card-title text-xl">Available Courses</h2>
           <div class="divider"></div>
           <div class="grid grid-cols-1 gap-3 max-h-[calc(100vh-300px)] overflow-y-auto pr-2">
-            {#each $selectedCourses as course}
+            {#each $classes as course}
               <CourseCard 
               {course} 
-              onToggleApproved={(id) => selectedCourses.toggleApproved(id)}
+              onToggleApproved={(id) => classes.toggleApproved(id)}
               />
             {/each}
           </div>
@@ -73,21 +103,32 @@
       <div class="card bg-base-100 shadow-lg">
         <div class="card-body">
           <h2 class="card-title text-xl">Your Course Plan</h2>
+          <div class="card bg-base-200 p-3 px-20 flex flex-row items-center">
+            <div class="flex flex-row items-center">
+              Preferred <br> Schedule
+            <ScheduleSelector />
+            </div>
+            <div class="flex flex-row items-center ml-12">
+              Intensity
+              <IntensitySelector />
+            </div>
+            <button class="btn btn-primary ml-20" on:click={handleOptimizeSchedule}>Optimize</button>
+          </div>
           <div class="divider"></div>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {#each years as year}
-              {#each terms as term}
-                <DropZone
-                  {year}
-                  {term}
-                  courses={getCoursesForTerm(year, term)}
-                  allSelectedCourses={$selectedCourses}
-                  onDrop={handleDrop}
-                  onRemove={(id) => selectedCourses.removeCourse(id)}
-                  onToggleApproved={(id) => selectedCourses.toggleApproved(id)}
-                  on:error={handleError}
-                />
-              {/each}
+            {#each yearTermList as { year, term }}
+
+              <DropZone
+                {year}
+                {term}
+                courses={getCoursesForTerm(year, term)}
+                allSelectedCourses={$classes}
+                onDrop={handleDrop}
+                onRemove={(id) => classes.removeCourse(id)}
+                onToggleApproved={(id) => classes.toggleApproved(id)}
+                on:error={handleError}
+              />
+
             {/each}
           </div>
         </div>
