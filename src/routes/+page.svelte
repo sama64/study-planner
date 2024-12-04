@@ -4,7 +4,7 @@
   import ScheduleSelector from '$lib/components/ScheduleSelector.svelte';
   import IntensitySelector from '$lib/components/IntensitySelector.svelte';
   import { classes, stats } from '$lib/stores/classes';
-  import optimizeCourseSchedule from '$lib/utils/courseScheduler';
+  import { CourseScheduler } from '$lib/utils/courseScheduler';
   import { configuration } from '$lib/stores/configuration';
 
   let currentYear = new Date().getFullYear();
@@ -40,48 +40,62 @@
     try {
       console.log('Starting optimization...');
       const coursesArray = Array.from($classes);
+      console.log('Current courses:', coursesArray);
       
-      // Reset all non-approved courses to remove their term assignments
-      coursesArray
-        .filter(course => !course.approved)
-        .forEach(course => {
-          const resetCourse = {
-            ...course,
-            termId: null,
-            year: null,
-            term: null,
-            selectedSchedule: null
-          };
-          classes.addCourse(resetCourse);
-        });
+      if (!coursesArray || coursesArray.length === 0) {
+        console.error('No courses found to optimize');
+        return;
+      }
 
       const preferences = {
         preferredTime: $configuration.preferredTime,
         maxHoursPerTerm: $configuration.maxHoursPerTerm
       };
-      console.log('Preferences:', preferences);
-      
-      // Get all non-approved courses for optimization
-      const coursesToOptimize = coursesArray.filter(course => !course.approved);
-      console.log('Courses to optimize:', coursesToOptimize);
-      
-      // Run the optimizer
-      const result = optimizeCourseSchedule(coursesToOptimize, preferences);
-      console.log('Optimization result:', result);
-      
-      // Update the store with optimized courses
-      result.courses.forEach(course => {
-        console.log('Adding optimized course to store:', course);
-        classes.addCourse(course, course.year, course.term);
+      console.log('Optimization preferences:', preferences);
+
+      // Reset non-approved courses
+      const resetCourses = coursesArray.map(course => {
+        if (!course.approved) {
+          return {
+            ...course,
+            termId: null,
+            year: null,
+            term: null,
+            selectedSchedule: null,
+            locked: false
+          };
+        }
+        return course;
       });
 
-      if (result.unscheduledCourses.length > 0) {
+      console.log('Reset courses:', resetCourses);
+      
+      // Initialize scheduler
+      const scheduler = new CourseScheduler(resetCourses, preferences);
+      console.log('Scheduler initialized');
+      
+      // Run optimization
+      const result = scheduler.optimizeCourseSchedule();
+      console.log('Optimization completed:', result);
+      
+      if (!result || !result.courses) {
+        console.error('Invalid optimization result');
+        return;
+      }
+
+      // Update store with results
+      result.courses.forEach(course => {
+        console.log('Updating course:', course);
+        classes.addCourse(course);
+      });
+
+      if (result.unscheduledCourses?.length > 0) {
         console.warn('Unscheduled courses:', result.unscheduledCourses);
         error = `No se pudieron programar ${result.unscheduledCourses.length} materias`;
       }
-    } catch (error) {
-      console.error('Schedule optimization failed:', error);
-      throw error;
+    } catch (err) {
+      console.error('Optimization error:', err);
+      error = `Error en la optimización: ${err.message}`;
     }
   }
 

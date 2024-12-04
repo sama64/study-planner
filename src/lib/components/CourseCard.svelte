@@ -70,28 +70,28 @@
           value={course.selectedSchedule ? `${course.selectedSchedule.days.join('/')}-${course.selectedSchedule.timeSlot}` : ''}
           on:change={(e) => {
             if (!e.target.value) {
-              course.selectedSchedule = null;
-              dispatch('scheduleChange', { courseId: course.id, schedule: null });
+              dispatch('scheduleChange', { courseId: course.id, schedule: null, locked: false });
               return;
             }
             
             const [days, time] = e.target.value.split('-');
             const newSchedule = {
               days: days.split('/'),
-              timeSlot: time
+              timeSlot: time,
+              locked: true // Indicamos que este horario fue elegido por el usuario
             };
-            dispatch('scheduleChange', { courseId: course.id, schedule: newSchedule });
+            dispatch('scheduleChange', { courseId: course.id, schedule: newSchedule, locked: true });
           }}
         >
           <option value="">Select schedule</option>
           {#each course.scheduleOptions as option}
             <option 
               value={`${option.days.join('/')}-${option.time}`}
-              selected={course.selectedSchedule && 
-                course.selectedSchedule.days.join('/') === option.days.join('/') && 
-                course.selectedSchedule.timeSlot === option.time}
             >
               {option.days.join('/')} - {option.time}
+              {course.selectedSchedule?.locked && 
+               course.selectedSchedule.days.join('/') === option.days.join('/') && 
+               course.selectedSchedule.timeSlot === option.time ? ' (locked)' : ''}
             </option>
           {/each}
         </select>

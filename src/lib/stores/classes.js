@@ -442,14 +442,11 @@ function createSelectedCoursesStore() {
 
   return {
     subscribe,
-    addCourse: (course, year, term) => update(courses => {
-      console.log('Adding/Updating course:', { course, year, term });
-      
+    addCourse: (course, year, term, locked = false) => update(courses => {
       const existingCourse = courses.find(c => c.id === course.id);
       let updatedCourses;
 
       if (existingCourse) {
-        console.log('Updating existing course');
         updatedCourses = courses.map(c =>
           c.id === course.id
             ? { 
@@ -458,12 +455,12 @@ function createSelectedCoursesStore() {
                 selectedSchedule: course.selectedSchedule || existingCourse.selectedSchedule,
                 termId: year && term ? createTermId(year, term) : course.termId,
                 year: year || course.year,
-                term: term || course.term
+                term: term || course.term,
+                locked: locked || existingCourse.locked
               }
             : c
         );
       } else {
-        console.log('Adding new course');
         updatedCourses = [...courses, {
           ...course,
           approved: false,
@@ -471,12 +468,10 @@ function createSelectedCoursesStore() {
           year: year,
           term: term,
           selectedSchedule: course.selectedSchedule || null,
-          lockedSchedule: false,
-          lockedTerm: false
+          locked: locked
         }];
       }
 
-      console.log('Updated courses:', updatedCourses);
       return updatedCourses;
     }),
 
