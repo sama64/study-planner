@@ -40,7 +40,20 @@
     try {
       console.log('Starting optimization...');
       const coursesArray = Array.from($classes);
-      console.log('Initial courses:', coursesArray);
+      
+      // Reset all non-approved courses to remove their term assignments
+      coursesArray
+        .filter(course => !course.approved)
+        .forEach(course => {
+          const resetCourse = {
+            ...course,
+            termId: null,
+            year: null,
+            term: null,
+            selectedSchedule: null
+          };
+          classes.addCourse(resetCourse);
+        });
 
       const preferences = {
         preferredTime: $configuration.preferredTime,
@@ -48,41 +61,27 @@
       };
       console.log('Preferences:', preferences);
       
-      // Filtramos los cursos que ya tienen un término asignado manualmente
-      const manuallyAssignedCourses = coursesArray.filter(course => 
-        course.termId && !course.approved
-      );
-      console.log('Manually assigned courses:', manuallyAssignedCourses);
-      
-      // Removemos los cursos asignados manualmente de la lista a optimizar
-      const coursesToOptimize = coursesArray.filter(course => 
-        !course.termId && !course.approved
-      );
+      // Get all non-approved courses for optimization
+      const coursesToOptimize = coursesArray.filter(course => !course.approved);
       console.log('Courses to optimize:', coursesToOptimize);
       
-      // Ejecutamos el optimizador solo con los cursos no asignados
+      // Run the optimizer
       const result = optimizeCourseSchedule(coursesToOptimize, preferences);
       console.log('Optimization result:', result);
       
-      // Combinamos los resultados
-      const allCourses = [
-        ...manuallyAssignedCourses,
-        ...result.courses
-      ];
-      console.log('All courses after optimization:', allCourses);
-      
-      // Actualizamos el store
-      allCourses.forEach(course => {
-        console.log('Adding course to store:', course);
+      // Update the store with optimized courses
+      result.courses.forEach(course => {
+        console.log('Adding optimized course to store:', course);
         classes.addCourse(course, course.year, course.term);
       });
 
       if (result.unscheduledCourses.length > 0) {
         console.warn('Unscheduled courses:', result.unscheduledCourses);
+        error = `No se pudieron programar ${result.unscheduledCourses.length} materias`;
       }
     } catch (error) {
       console.error('Schedule optimization failed:', error);
-      throw error; // Re-throw para ver el stack trace completo
+      throw error;
     }
   }
 
@@ -128,6 +127,10 @@
               <CourseCard 
               {course} 
               onToggleApproved={(id) => classes.toggleApproved(id)}
+              on:scheduleChange={(event) => {
+                const { courseId, schedule } = event.detail;
+                classes.addCourse({ ...course, selectedSchedule: schedule });
+              }}
               />
             {/each}
           </div>

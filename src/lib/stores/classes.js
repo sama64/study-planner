@@ -454,7 +454,8 @@ function createSelectedCoursesStore() {
           c.id === course.id
             ? { 
                 ...c, 
-                ...course, 
+                ...course,
+                selectedSchedule: course.selectedSchedule || existingCourse.selectedSchedule,
                 termId: year && term ? createTermId(year, term) : course.termId,
                 year: year || course.year,
                 term: term || course.term
@@ -469,10 +470,9 @@ function createSelectedCoursesStore() {
           termId: year && term ? createTermId(year, term) : null,
           year: year,
           term: term,
-          selectedSchedule: course.selectedSchedule || { days: [], time: '' },
+          selectedSchedule: course.selectedSchedule || null,
           lockedSchedule: false,
-          lockedTerm: false,
-          preferredTime: 'day'
+          lockedTerm: false
         }];
       }
 

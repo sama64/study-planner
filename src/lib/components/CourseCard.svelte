@@ -1,4 +1,7 @@
 <script>
+  import { createEventDispatcher } from 'svelte';
+  const dispatch = createEventDispatcher();
+  
   export let course;
   export let isDraggable = true;
   export let onRemove = undefined;
@@ -60,10 +63,40 @@
     
     <div class="flex flex-wrap gap-2 text-xs opacity-70">
       <span class="badge badge-neutral">{course.hours}hs</span>
-      {#if course.selectedSchedule !== {}}
-        <span class="badge badge-ghost">
-          {course.selectedSchedule.days.join('/')} - {course.selectedSchedule.timeSlot}
-        </span>
+      
+      {#if course.scheduleOptions?.length > 0}
+        <select 
+          class="select select-xs select-bordered w-48"
+          value={course.selectedSchedule ? `${course.selectedSchedule.days.join('/')}-${course.selectedSchedule.timeSlot}` : ''}
+          on:change={(e) => {
+            if (!e.target.value) {
+              course.selectedSchedule = null;
+              dispatch('scheduleChange', { courseId: course.id, schedule: null });
+              return;
+            }
+            
+            const [days, time] = e.target.value.split('-');
+            const newSchedule = {
+              days: days.split('/'),
+              timeSlot: time
+            };
+            dispatch('scheduleChange', { courseId: course.id, schedule: newSchedule });
+          }}
+        >
+          <option value="">Select schedule</option>
+          {#each course.scheduleOptions as option}
+            <option 
+              value={`${option.days.join('/')}-${option.time}`}
+              selected={course.selectedSchedule && 
+                course.selectedSchedule.days.join('/') === option.days.join('/') && 
+                course.selectedSchedule.timeSlot === option.time}
+            >
+              {option.days.join('/')} - {option.time}
+            </option>
+          {/each}
+        </select>
+      {:else}
+        <span class="badge badge-ghost">No schedules available</span>
       {/if}
     </div>
 
