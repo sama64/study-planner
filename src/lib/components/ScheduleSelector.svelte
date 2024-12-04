@@ -4,18 +4,14 @@
   import MoonIcon from '$lib/icons/moon-icon.svg';
 
   function handleThemeChange(preferredTime) {
-    configuration.update(config => ({
-        ...config,
-        theme: preferredTime
-    }));
+    configuration.setPreferredTime(preferredTime);
   }
 </script>
-
 
 <div class="flex gap-2 ml-4">
   <button 
       class="w-12 h-12 rounded-lg flex items-center justify-center
-      {$configuration.theme === 'day' 
+      {$configuration.preferredTime === 'day' 
           ? 'border-2 border-white/20 ring-2 ring-primary/50 bg-primary/10' 
           : 'bg-base-content/10 hover:bg-base-content/20'}"
       on:click={() => handleThemeChange('day')}
@@ -28,7 +24,7 @@
   </button>
   <button 
       class="w-12 h-12 rounded-lg flex items-center justify-center
-      {$configuration.theme === 'night' 
+      {$configuration.preferredTime === 'night' 
           ? 'border-2 border-white/20 ring-2 ring-primary/50 bg-primary/10' 
           : 'bg-base-content/10 hover:bg-base-content/20'}"
       on:click={() => handleThemeChange('night')}

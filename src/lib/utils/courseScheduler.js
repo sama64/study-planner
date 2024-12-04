@@ -1,67 +1,157 @@
 class CourseScheduler {
-  constructor(courses) {
+  constructor(courses, preferences = { preferredTime: 'day', maxHoursPerTerm: 384 }) {
     this.originalCourses = JSON.parse(JSON.stringify(courses));
-    this.courses = this.originalCourses;
+    this.preferences = preferences;
+    this.terms = [
+      '2024C2', 
+      '2025C1', '2025C2', 
+      '2026C1', '2026C2',
+      '2027C1', '2027C2',
+      '2028C1', '2028C2',
+      '2029C1'
+    ];
   }
 
-  // [Previous utility methods remain the same]
+  canTakeCourse(course, approvedCourses, currentTermCourses) {
+    if (!course.correlatives?.length) return true;
+    
+    const hasApprovedPrereqs = course.correlatives.every(prereqId => 
+      approvedCourses.has(prereqId)
+    );
 
-  // Main optimization method
+    const hasPrereqInSameTerm = course.correlatives.some(prereqId => 
+      currentTermCourses.some(tc => tc.id === prereqId)
+    );
+
+    return hasApprovedPrereqs && !hasPrereqInSameTerm;
+  }
+
+  hasScheduleConflict(course1, course2) {
+    if (!course1.selectedSchedule || !course2.selectedSchedule) return false;
+    
+    const schedule1 = course1.selectedSchedule;
+    const schedule2 = course2.selectedSchedule;
+    
+    const daysOverlap = schedule1.days.some(day => schedule2.days.includes(day));
+    if (!daysOverlap) return false;
+
+    const [startTime1, endTime1] = schedule1.timeSlot.split('-').map(this.timeToMinutes);
+    const [startTime2, endTime2] = schedule2.timeSlot.split('-').map(this.timeToMinutes);
+
+    return !(endTime1 <= startTime2 || endTime2 <= startTime1);
+  }
+
+  timeToMinutes(timeStr) {
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    return hours * 60 + minutes;
+  }
+
+  selectBestSchedule(course, currentTermCourses) {
+    const schedules = course.scheduleOptions || [];
+    if (schedules.length === 0) return null;
+
+    const preferredTime = this.preferences.preferredTime;
+    
+    const validSchedules = schedules.filter(schedule => {
+      const courseWithSchedule = { ...course, selectedSchedule: {
+        days: schedule.days,
+        timeSlot: schedule.time
+      }};
+      
+      return !currentTermCourses.some(tc => 
+        this.hasScheduleConflict(tc, courseWithSchedule)
+      );
+    });
+
+    if (validSchedules.length === 0) return null;
+
+    const preferredSchedules = validSchedules.filter(schedule => {
+      const startTime = parseInt(schedule.time.split(':')[0]);
+      return preferredTime === 'day' ? startTime < 18 : startTime >= 18;
+    });
+
+    const selectedSchedule = preferredSchedules.length > 0 ? 
+      preferredSchedules[0] : validSchedules[0];
+
+    return {
+      days: selectedSchedule.days,
+      timeSlot: selectedSchedule.time
+    };
+  }
+
   optimizeCourseSchedule() {
-    // Track approved courses initially
-    let approvedCourses = new Set(
-      this.courses
+    const approvedCourses = new Set(
+      this.originalCourses
         .filter(course => course.approved)
         .map(course => course.id)
     );
 
-    // Optimization results
-    const results = {
-      term1: null,
-      term2: null
-    };
+    const scheduledCourses = [];
+    const remainingCourses = [...this.originalCourses]
+      .filter(course => !course.approved)
+      .sort((a, b) => {
+        const aWeight = this.originalCourses.filter(c => 
+          c.correlatives?.includes(a.id)).length - (a.correlatives?.length || 0);
+        const bWeight = this.originalCourses.filter(c => 
+          c.correlatives?.includes(b.id)).length - (b.correlatives?.length || 0);
+        return bWeight - aWeight;
+      });
 
-    // Optimize first term
-    results.term1 = this.optimizeTermSchedule(1, approvedCourses);
+    const termSchedules = {};
 
-    // Update approved courses for second term
-    const term1ApprovedCourses = new Set([
-      ...approvedCourses,
-      ...results.term1.scheduledCourses.map(c => c.id)
-    ]);
+    for (const termId of this.terms) {
+      const [year, term] = termId.match(/(\d+)C(\d+)/).slice(1);
+      const termCourses = [];
+      let termHours = 0;
 
-    // Optimize second term
-    results.term2 = this.optimizeTermSchedule(2, term1ApprovedCourses);
+      for (let i = 0; i < remainingCourses.length; i++) {
+        const course = remainingCourses[i];
+        
+        if (this.canTakeCourse(course, approvedCourses, termCourses) &&
+            termHours + course.hours <= this.preferences.maxHoursPerTerm) {
+          
+          const selectedSchedule = this.selectBestSchedule(course, termCourses);
+          
+          if (selectedSchedule) {
+            course.selectedSchedule = selectedSchedule;
+            course.termId = termId;
+            course.year = parseInt(year);
+            course.term = parseInt(term);
+            
+            termCourses.push(course);
+            termHours += course.hours;
+            
+            remainingCourses.splice(i, 1);
+            i--;
+          }
+        }
+      }
 
-    // Update original courses with scheduled options
-    this.courses = this.courses.map(course => {
-      const term1Match = results.term1.scheduledCourses.find(c => c.id === course.id);
-      const term2Match = results.term2.scheduledCourses.find(c => c.id === course.id);
-
-      return {
-        ...course,
-        selectedSchedule: term1Match?.selectedSchedule ||
-          term2Match?.selectedSchedule ||
-          course.selectedSchedule
+      termSchedules[termId] = {
+        courses: termCourses.map(course => ({
+          id: course.id,
+          name: course.name,
+          schedule: course.selectedSchedule,
+          hours: course.hours
+        })),
+        totalHours: termHours
       };
-    });
+
+      termCourses.forEach(course => approvedCourses.add(course.id));
+      scheduledCourses.push(...termCourses);
+    }
 
     return {
-      scheduledCourses: this.courses,
-      schedulingLogs: {
-        term1: results.term1.schedulingLog,
-        term2: results.term2.schedulingLog
-      }
+      courses: scheduledCourses,
+      termSchedules: termSchedules,
+      unscheduledCourses: remainingCourses
     };
   }
-
-  // Rest of the implementation remains the same as in the previous version
 }
 
-// Export function matching original interface
-function optimizeCourseSchedule(courses) {
-  const scheduler = new CourseScheduler(courses);
-  return scheduler.optimizeCourseSchedule().scheduledCourses;
+function optimizeCourseSchedule(courses, preferences = { preferredTime: 'day', maxHoursPerTerm: 384 }) {
+  const scheduler = new CourseScheduler(courses, preferences);
+  return scheduler.optimizeCourseSchedule();
 }
 
 export default optimizeCourseSchedule;

@@ -56,7 +56,7 @@
 
   $: totalHours = courses.reduce((sum, course) => sum + course.hours, 0);
   $: approvedCourses = courses.filter(course => course.approved).length;
-  $: isOverloaded = totalHours > 160; // Example threshold
+  $: isOverloaded = totalHours > 256; 
 </script>
 
 <div 

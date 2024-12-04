@@ -4,13 +4,14 @@ import { browser } from '$app/environment';
 function createConfigurationStore() {
   const initialValue = {
     theme: 'day',
-    selectedImageIndex: 0
+    selectedImageIndex: 0,
+    maxHoursPerTerm: 256,
+    preferredTime: 'day'
   };
 
   const { subscribe, set, update } = writable(initialValue);
 
   if (browser) {
-    // Try to load from localStorage when in browser
     try {
       const savedConfig = localStorage.getItem('userConfiguration');
       if (savedConfig) {
@@ -20,7 +21,6 @@ function createConfigurationStore() {
       console.error('Error loading configuration:', error);
     }
 
-    // Subscribe to changes and save to localStorage
     subscribe((value) => {
       try {
         localStorage.setItem('userConfiguration', JSON.stringify(value));
@@ -33,7 +33,15 @@ function createConfigurationStore() {
   return {
     subscribe,
     set,
-    update
+    update,
+    setIntensity: (index) => update(config => ({
+      ...config,
+      maxHoursPerTerm: index === 0 ? Infinity : 256
+    })),
+    setPreferredTime: (time) => update(config => ({
+      ...config,
+      preferredTime: time
+    }))
   };
 }
 

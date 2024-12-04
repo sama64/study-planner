@@ -443,38 +443,54 @@ function createSelectedCoursesStore() {
   return {
     subscribe,
     addCourse: (course, year, term) => update(courses => {
+      console.log('Adding/Updating course:', { course, year, term });
+      
       const existingCourse = courses.find(c => c.id === course.id);
+      let updatedCourses;
 
       if (existingCourse) {
-        console.log(`Updating existing course: ${year} C${term}`);
-        return courses.map(c =>
+        console.log('Updating existing course');
+        updatedCourses = courses.map(c =>
           c.id === course.id
-            ? { ...c, ...course, termId: createTermId(year, term), year: year, term: term }
+            ? { 
+                ...c, 
+                ...course, 
+                termId: year && term ? createTermId(year, term) : course.termId,
+                year: year || course.year,
+                term: term || course.term
+              }
             : c
         );
+      } else {
+        console.log('Adding new course');
+        updatedCourses = [...courses, {
+          ...course,
+          approved: false,
+          termId: year && term ? createTermId(year, term) : null,
+          year: year,
+          term: term,
+          selectedSchedule: course.selectedSchedule || { days: [], time: '' },
+          lockedSchedule: false,
+          lockedTerm: false,
+          preferredTime: 'day'
+        }];
       }
 
-      console.log('Adding new course:', course);
-      return [...courses, {
-        ...course,
-        approved: false,
-        termId: createTermId(course.year, course.term),
-        selectedSchedule: { days: [], time: '' },
-        lockedSchedule: false,
-        lockedTerm: false,
-        preferredTime: 'day'
-      }];
+      console.log('Updated courses:', updatedCourses);
+      return updatedCourses;
     }),
 
-    // removeCourse: (courseId) =>
-    //   update(courses => courses.filter(c => c.id !== courseId)),
-
-    toggleApproved: (courseId) =>
-      update(courses => courses.map(c =>
+    toggleApproved: (courseId) => update(courses => {
+      console.log('Toggling approved for course:', courseId);
+      return courses.map(c =>
         c.id === courseId ? { ...c, approved: !c.approved } : c
-      )),
+      );
+    }),
 
-    reset: () => set([])
+    reset: () => {
+      console.log('Resetting courses');
+      set([]);
+    }
   };
 }
 
