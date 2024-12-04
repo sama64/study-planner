@@ -4,7 +4,7 @@
   import ScheduleSelector from '$lib/components/ScheduleSelector.svelte';
   import IntensitySelector from '$lib/components/IntensitySelector.svelte';
   import { classes, stats } from '$lib/stores/classes';
-  import { optimizeCourseSchedule } from '$lib/utils/courseScheduler';
+  import optimizeCourseSchedule from '$lib/utils/courseScheduler';
 
   let currentYear = new Date().getFullYear();
   let currentTerm = new Date().getMonth() < 6 ? 1 : 2;

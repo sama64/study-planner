@@ -518,7 +518,7 @@ export function checkScheduleConflict(course1, course2) {
 
   const daysOverlap = course1.scheduleOptions.some(option =>
     course2.scheduleOptions.some(otherOption =>
-      otherOption.days.some(day => optcion.days.includes(day))
+      otherOption.days.some(day => option.days.includes(day))
     )
   );
 
