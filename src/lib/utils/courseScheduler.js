@@ -16,14 +16,33 @@ class Course {
 export class CourseScheduler {
   constructor(preferences = { preferredTime: 'day', maxHoursPerTerm: 384 }) {
     this.preferences = preferences;
-    this.terms = [
-      '2024C2',
-      '2025C1', '2025C2', '2026C1', '2026C2',
-      '2027C1', '2027C2', '2028C1', '2028C2',
-      '2029C1', '2029C2', '2030C1', '2030C2',
-      '2031C1', '2031C2', '2032C1', '2032C2',
+    
+    // Generate terms dynamically
+    let currentYear = new Date().getFullYear();
+    let currentMonth = new Date().getMonth();
+    
+    // If December, start from next year
+    if (currentMonth === 11) {
+      currentYear++;
+    }
+    
+    let currentTerm = currentMonth < 6 ? 1 : 2;
+    
+    // If December, start from term 1
+    if (currentMonth === 11) {
+      currentTerm = 1;
+    }
 
-    ];
+    // Generate 16 terms
+    this.terms = [];
+    for (let i = 0; i < 16; i++) {
+      this.terms.push(`${currentYear}C${currentTerm}`);
+      currentTerm++;
+      if (currentTerm > 2) {
+        currentTerm = 1;
+        currentYear++;
+      }
+    }
 
     // Convert raw courses data to Course instances
     this.courses = new Map(
