@@ -67,7 +67,7 @@
       {#if course.scheduleOptions?.length > 0}
         <select 
           class="select select-xs select-bordered w-48"
-          value={course.selectedSchedule ? `${course.selectedSchedule.days.join('/')}-${course.selectedSchedule.timeSlot}` : ''}
+          value={course.selectedSchedule ? `${course.selectedSchedule.days.join('/')}-${course.selectedSchedule.time || course.selectedSchedule.timeSlot}` : ''}
           on:change={(e) => {
             if (!e.target.value) {
               dispatch('scheduleChange', { courseId: course.id, schedule: null, locked: false });
@@ -77,8 +77,9 @@
             const [days, time] = e.target.value.split('-');
             const newSchedule = {
               days: days.split('/'),
+              time: time,
               timeSlot: time,
-              locked: true // Indicamos que este horario fue elegido por el usuario
+              locked: true
             };
             dispatch('scheduleChange', { courseId: course.id, schedule: newSchedule, locked: true });
           }}

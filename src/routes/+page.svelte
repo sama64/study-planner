@@ -8,10 +8,22 @@
   import { configuration } from '$lib/stores/configuration';
 
   let currentYear = new Date().getFullYear();
-  let currentTerm = new Date().getMonth() < 6 ? 1 : 2;
+  let currentMonth = new Date().getMonth(); // 0-11
+  
+  // Si estamos en diciembre, comenzar desde el próximo año
+  if (currentMonth === 11) {
+    currentYear++;
+  }
+  
+  let currentTerm = currentMonth < 6 ? 1 : 2;
+  
+  // Si estamos en diciembre, comenzar desde el término 1
+  if (currentMonth === 11) {
+    currentTerm = 1;
+  }
 
   // Generate the year-term list
-  let totalEntries = 10; // Number of entries to display
+  let totalEntries = 16; // Number of entries to display
   let yearTermList = [];
 
   for (let i = 0; i < totalEntries; i++) {
@@ -215,5 +227,6 @@
         </div>
       </div>
     </div>
+
   </div>
 </div>

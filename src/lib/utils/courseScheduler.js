@@ -1,5 +1,5 @@
 import { writable, derived } from 'svelte/store';
-import rawStudyPlan from '../../../static/mecatronica-2024C2.json';
+import rawStudyPlan from '../../static/mecatronica-2024C2.json';
 
 class Course {
   constructor(id, name, year, term, hours, scheduleOptions, correlatives) {
@@ -18,13 +18,11 @@ export class CourseScheduler {
     this.preferences = preferences;
     this.terms = [
       '2024C2',
-      '2025C1', '2025C2',
-      '2026C1', '2026C2',
-      '2027C1', '2027C2',
-      '2028C1', '2028C2',
-      '2029C1', '2029C2',
-      '2030C1', '2030C2',
-      '2031C1', '2031C2'
+      '2025C1', '2025C2', '2026C1', '2026C2',
+      '2027C1', '2027C2', '2028C1', '2028C2',
+      '2029C1', '2029C2', '2030C1', '2030C2',
+      '2031C1', '2031C2', '2032C1', '2032C2',
+
     ];
 
     // Convert raw courses data to Course instances
