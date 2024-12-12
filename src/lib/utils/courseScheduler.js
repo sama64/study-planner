@@ -14,7 +14,7 @@ class Course {
 }
 
 export class CourseScheduler {
-  constructor(preferences = { preferredTime: 'day', maxHoursPerTerm: 384 }) {
+  constructor(preferences = { preferredTime: 'day', maxHoursPerTerm: 384 }, approvedCourseIds = []) {
     this.preferences = preferences;
     
     // Generate terms dynamically
@@ -52,7 +52,8 @@ export class CourseScheduler {
       ])
     );
 
-    this.approvedCourses = new Set();
+    // Initialize approvedCourses with the provided IDs
+    this.approvedCourses = new Set(approvedCourseIds);
     this.chosenSchedules = new Map();
   }
 
@@ -305,8 +306,13 @@ export const statsStore = derived(selectedCoursesStore, $courses => ({
   }, {})
 }));
 
-export function optimizeCourseSchedule(preferences) {
-  const scheduler = new CourseScheduler(preferences);
+export function optimizeCourseSchedule(preferences, courses) {
+  // Get the IDs of approved courses
+  const approvedCourseIds = courses
+    .filter(course => course.approved)
+    .map(course => course.id);
+
+  const scheduler = new CourseScheduler(preferences, approvedCourseIds);
   return scheduler.planCourses();
 }
 

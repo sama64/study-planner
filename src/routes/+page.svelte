@@ -66,7 +66,7 @@
       };
       console.log('Optimization preferences:', preferences);
 
-      const result = optimizeCourseSchedule(preferences);
+      const result = optimizeCourseSchedule(preferences, $classes);
       console.log('Optimization result:', result);
 
       if (!result || !result.plan) {
@@ -77,7 +77,7 @@
       classes.update(courses => {
         const updatedCourses = [...courses];
         
-        // Reset non-approved courses
+        // Reset only non-approved courses
         updatedCourses.forEach(course => {
           if (!course.approved) {
             course.year = null;
