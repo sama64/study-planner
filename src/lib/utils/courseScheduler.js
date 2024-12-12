@@ -1,381 +1,296 @@
+import { writable, derived } from 'svelte/store';
+import rawStudyPlan from '../../../static/mecatronica-2024C2.json';
+
+class Course {
+  constructor(id, name, year, term, hours, scheduleOptions, correlatives) {
+    this.id = id;
+    this.name = name;
+    this.year = year;
+    this.term = term;
+    this.hours = hours;
+    this.scheduleOptions = scheduleOptions;
+    this.correlatives = correlatives;
+  }
+}
+
 export class CourseScheduler {
-  constructor(courses, preferences = { preferredTime: 'day', maxHoursPerTerm: 384 }) {
-    this.originalCourses = JSON.parse(JSON.stringify(courses));
-    const maxHoursLimit = 384;
-    this.preferences = {
-      ...preferences,
-      maxHoursPerTerm: Math.min(preferences.maxHoursPerTerm, maxHoursLimit)
-    };
+  constructor(preferences = { preferredTime: 'day', maxHoursPerTerm: 384 }) {
+    this.preferences = preferences;
     this.terms = [
-      '2024C2', 
-      '2025C1', '2025C2', 
+      '2024C2',
+      '2025C1', '2025C2',
       '2026C1', '2026C2',
       '2027C1', '2027C2',
       '2028C1', '2028C2',
-      '2029C1', '2029C2'
+      '2029C1', '2029C2',
+      '2030C1', '2030C2',
+      '2031C1', '2031C2'
     ];
-  }
 
-  canTakeCourse(course, approvedCourses, currentTermCourses, termId) {
-    if (!course.correlatives?.length) return true;
-    
-    return course.correlatives.every(prereqId => {
-      if (approvedCourses.has(prereqId)) return true;
+    // Convert raw courses data to Course instances
+    this.courses = new Map(
+      rawStudyPlan.map(c => [
+        c.id,
+        new Course(c.id, c.name, c.year, c.term, c.hours, c.scheduleOptions, c.correlatives)
+      ])
+    );
 
-      const prerequisiteCourse = this.originalCourses.find(c => c.id === prereqId);
-      if (!prerequisiteCourse) return false;
-
-      if (prerequisiteCourse.termId >= termId) return false;
-
-      return true;
-    });
+    this.approvedCourses = new Set();
+    this.chosenSchedules = new Map();
   }
 
   timeToMinutes(timeStr) {
-    const normalizedTime = timeStr.replace(':', '').padEnd(4, '0');
-    const hours = parseInt(normalizedTime.substring(0, 2));
-    const minutes = parseInt(normalizedTime.substring(2, 4));
+    const [hours, minutes] = timeStr.split(':').map(Number);
     return hours * 60 + minutes;
   }
 
-  getTimeRange(schedule) {
-    const [startTime, endTime] = schedule.timeSlot.split('-').map(this.timeToMinutes);
-    return {
-      start: startTime,
-      end: endTime,
-      duration: endTime - startTime
-    };
-  }
+  checkScheduleCompatibility(schedule1, schedule2) {
+    const days1 = new Set(schedule1.days);
+    const days2 = new Set(schedule2.days);
 
-  isPreferredTimeSlot(timeRange, preferredTime) {
-    const startHour = Math.floor(timeRange.start / 60);
-    const endHour = Math.floor(timeRange.end / 60);
-    
-    switch (preferredTime) {
-      case 'morning':
-        return startHour >= 8 && endHour <= 13;
-      case 'afternoon':
-        return startHour >= 13 && endHour <= 18;
-      case 'night':
-        return startHour >= 18;
-      case 'day':
-        return startHour >= 8 && endHour <= 18;
-      default:
-        return true;
+    // If no common days, schedules are compatible
+    if (!Array.from(days1).some(day => days2.has(day))) {
+      return true;
     }
+
+    const [start1, end1] = schedule1.time.split('-')
+      .map(t => this.timeToMinutes(t.trim()));
+    const [start2, end2] = schedule2.time.split('-')
+      .map(t => this.timeToMinutes(t.trim()));
+
+    return end1 <= start2 || end2 <= start1;
   }
 
-  hasScheduleConflict(course1, course2) {
-    if (!course1.schedule || !course2.selectedSchedule) return false;
-    
-    const schedule1 = course1.schedule;
-    const schedule2 = course2.selectedSchedule;
-    
-    console.log('Checking conflict between:', {
-      course1: course1.name,
-      schedule1,
-      course2: course2.name,
-      schedule2
-    });
+  findValidSchedule(course, termCourses) {
+    for (const newSchedule of course.scheduleOptions) {
+      let isValid = true;
+      
+      for (const existingCourse of termCourses) {
+        const existingSchedule = this.chosenSchedules.get(existingCourse.id);
+        if (existingSchedule && !this.checkScheduleCompatibility(newSchedule, existingSchedule)) {
+          isValid = false;
+          break;
+        }
+      }
 
-    const hasCommonDay = schedule1.days.some(day => 
-      schedule2.days.includes(day)
-    );
-    
-    if (!hasCommonDay) {
-      console.log('No common days, no conflict');
+      if (isValid) {
+        return newSchedule;
+      }
+    }
+    return null;
+  }
+
+  canAssignToTerm(course, term, currentPlan) {
+    // Check if course is already approved
+    if (this.approvedCourses.has(course.id)) {
       return false;
     }
 
-    const [start1, end1] = schedule1.timeSlot.split('-')
-      .map(t => t.trim());
-    const [start2, end2] = schedule2.timeSlot.split('-')
-      .map(t => t.trim());
-    
-    const time1Start = this.timeToMinutes(start1);
-    const time1End = this.timeToMinutes(end1);
-    const time2Start = this.timeToMinutes(start2);
-    const time2End = this.timeToMinutes(end2);
+    // Check prerequisites
+    for (const prereqId of course.correlatives) {
+      if (this.approvedCourses.has(prereqId)) {
+        continue;
+      }
 
-    console.log('Time comparison:', {
-      course1: `${course1.name}: ${time1Start}-${time1End}`,
-      course2: `${course2.name}: ${time2Start}-${time2End}`
-    });
-
-    const hasOverlap = (
-      (time2Start >= time1Start && time2Start < time1End) ||
-      (time1Start >= time2Start && time1Start < time2End)
-    );
-
-    if (hasOverlap) {
-      console.log('CONFLICT DETECTED:', {
-        course1: `${course1.name} (${start1}-${end1})`,
-        course2: `${course2.name} (${start2}-${end2})`
-      });
-    }
-
-    return hasOverlap;
-  }
-
-  selectBestSchedule(course, currentTermCourses) {
-    console.log('Selecting schedule for:', course.name);
-    console.log('Current term courses:', currentTermCourses);
-
-    const schedules = course.scheduleOptions || [];
-    if (schedules.length === 0) return null;
-
-    const validSchedules = schedules.filter(schedule => {
-      const courseWithSchedule = {
-        ...course,
-        selectedSchedule: {
-          days: schedule.days,
-          timeSlot: schedule.time
-        }
-      };
+      let prereqCompleted = false;
+      const termIndex = this.terms.indexOf(term);
       
-      const conflicts = currentTermCourses.filter(tc => 
-        this.hasScheduleConflict(tc, courseWithSchedule)
-      );
+      for (let i = 0; i < termIndex; i++) {
+        const prevTerm = this.terms[i];
+        if (currentPlan[prevTerm]?.some(c => c.id === prereqId)) {
+          prereqCompleted = true;
+          break;
+        }
+      }
 
-      if (conflicts.length > 0) {
-        console.log(`Schedule ${schedule.time} has conflicts with:`, 
-          conflicts.map(c => `${c.name} (${c.schedule.timeSlot})`)
-        );
+      if (!prereqCompleted) {
         return false;
       }
-
-      return true;
-    });
-
-    if (validSchedules.length === 0) {
-      console.log(`No valid schedules found for ${course.name}`);
-      return null;
     }
 
-    console.log(`Valid schedules for ${course.name}:`, validSchedules);
-
-    const selectedSchedule = validSchedules[0];
-    return {
-      days: selectedSchedule.days,
-      timeSlot: selectedSchedule.time
-    };
-  }
-
-  getPrerequisiteDepth(courseId, memo = new Map()) {
-    if (memo.has(courseId)) return memo.get(courseId);
-    
-    const course = this.originalCourses.find(c => c.id === courseId);
-    if (!course || !course.correlatives?.length) {
-      memo.set(courseId, 0);
-      return 0;
+    // Check term hours limit
+    const termCourses = currentPlan[term] || [];
+    const termHours = termCourses.reduce((sum, c) => sum + c.hours, 0);
+    if (termHours + course.hours > this.preferences.maxHoursPerTerm) {
+      return false;
     }
 
-    const depth = 1 + Math.max(...course.correlatives.map(prereqId => 
-      this.getPrerequisiteDepth(prereqId, memo)
-    ));
-    
-    memo.set(courseId, depth);
-    return depth;
+    // Check schedule availability
+    return this.findValidSchedule(course, termCourses) !== null;
   }
 
-  getEarliestPossibleTerm(course, approvedCourses, scheduledCourses) {
-    if (!course.correlatives?.length) return this.terms[0];
-    
-    let maxPrereqTerm = '0000C0';
-    
-    for (const prereqId of course.correlatives) {
-      if (approvedCourses.has(prereqId)) continue;
-      
-      const prereqCourse = scheduledCourses.find(c => c.id === prereqId);
-      if (!prereqCourse || !prereqCourse.termId) {
-        return null;
-      }
-      
-      maxPrereqTerm = prereqCourse.termId > maxPrereqTerm ? prereqCourse.termId : maxPrereqTerm;
+  tryScheduleCourses(remainingCourses, currentPlan, attempted = new Set()) {
+    if (remainingCourses.length === 0) {
+      return [true, currentPlan];
     }
-    
-    const termIndex = this.terms.indexOf(maxPrereqTerm);
-    return termIndex >= 0 ? this.terms[termIndex + 1] : null;
-  }
 
-  findBaseCourses(courses, approvedCourses) {
-    return courses.filter(course => {
-      if (!course.correlatives?.length) return true;
-      return course.correlatives.every(prereqId => approvedCourses.has(prereqId));
-    });
-  }
+    const courseId = remainingCourses[0];
+    const course = this.courses.get(courseId);
 
-  buildCourseLevels(coursesToOptimize, approvedCourses) {
-    const levels = [];
-    let remainingCourses = [...coursesToOptimize];
-    let currentApproved = new Set(approvedCourses);
+    if (this.approvedCourses.has(courseId)) {
+      return this.tryScheduleCourses(remainingCourses.slice(1), currentPlan, attempted);
+    }
 
-    console.log('Building levels with:', {
-      coursesToOptimize: coursesToOptimize.length,
-      approvedCourses: Array.from(approvedCourses),
-      remainingCourses: remainingCourses.length
-    });
+    const assignmentKey = `${courseId}`;
+    if (attempted.has(assignmentKey)) {
+      return this.tryScheduleCourses(remainingCourses.slice(1), currentPlan, new Set());
+    }
 
-    while (remainingCourses.length > 0) {
-      const availableCourses = this.findBaseCourses(remainingCourses, currentApproved);
-      
-      console.log('Available courses:', availableCourses.map(c => c.name));
-      
-      if (availableCourses.length === 0) {
-        console.warn('Correlative chain broken, remaining courses:', 
-          remainingCourses.map(c => ({
-            name: c.name, 
-            correlatives: c.correlatives
-          }))
-        );
-        break;
-      }
-
-      levels.push(availableCourses);
-      
-      availableCourses.forEach(course => currentApproved.add(course.id));
-      remainingCourses = remainingCourses.filter(course => 
-        !availableCourses.some(ac => ac.id === course.id)
+    for (const term of this.terms) {
+      // Create a deep copy of the current plan
+      const testPlan = Object.fromEntries(
+        Object.entries(currentPlan).map(([t, courses]) => [t, [...courses]])
       );
+
+      if (this.canAssignToTerm(course, term, testPlan)) {
+        if (!testPlan[term]) testPlan[term] = [];
+        testPlan[term].push(course);
+        
+        const schedule = this.findValidSchedule(course, testPlan[term].slice(0, -1));
+        this.chosenSchedules.set(courseId, schedule);
+
+        const [success, newPlan] = this.tryScheduleCourses(
+          remainingCourses.slice(1),
+          testPlan,
+          attempted
+        );
+
+        if (success) {
+          return [true, newPlan];
+        }
+      }
     }
 
-    return levels;
+    attempted.add(assignmentKey);
+    return this.tryScheduleCourses(remainingCourses.slice(1), currentPlan, new Set());
   }
 
-  optimizeCourseSchedule() {
-    const approvedCourses = new Set(
-      this.originalCourses
-        .filter(course => course.approved)
+  buildGraph() {
+    const graph = new Map();
+    const inverseGraph = new Map();
+    const inDegree = new Map();
+    
+    for (const [courseId, course] of this.courses) {
+      if (!course.correlatives?.length) {
+        inDegree.set(courseId, 0);
+      }
+      for (const correlativeId of course.correlatives || []) {
+        if (!graph.has(correlativeId)) graph.set(correlativeId, []);
+        if (!inverseGraph.has(courseId)) inverseGraph.set(courseId, []);
+        
+        graph.get(correlativeId).push(courseId);
+        inverseGraph.get(courseId).push(correlativeId);
+        inDegree.set(courseId, (inDegree.get(courseId) || 0) + 1);
+      }
+    }
+    
+    return { graph, inverseGraph, inDegree };
+  }
+
+  topologicalSort() {
+    const { graph, inDegree } = this.buildGraph();
+    
+    // Queue for courses without dependencies
+    const queue = Array.from(this.courses.keys())
+      .filter(id => !inDegree.get(id));
+    
+    const sortedCourses = [];
+    const levels = new Map();
+    const courseLevels = new Map();
+    let currentLevel = 0;
+    
+    while (queue.length) {
+      const levelSize = queue.length;
+      levels.set(currentLevel, []);
+      
+      for (let i = 0; i < levelSize; i++) {
+        const courseId = queue.shift();
+        sortedCourses.push(courseId);
+        levels.get(currentLevel).push(courseId);
+        courseLevels.set(courseId, currentLevel);
+        
+        // Process dependent courses
+        for (const dependent of graph.get(courseId) || []) {
+          inDegree.set(dependent, inDegree.get(dependent) - 1);
+          if (inDegree.get(dependent) === 0) {
+            queue.push(dependent);
+          }
+        }
+      }
+      
+      currentLevel++;
+    }
+    
+    return { sortedCourses, levels, courseLevels };
+  }
+
+  planCourses() {
+    // Initialize structures
+    this.chosenSchedules = new Map();
+    const initialPlan = Object.fromEntries(
+      this.terms.map(term => [term, []])
+    );
+    
+    // Get topological sort
+    const { sortedCourses } = this.topologicalSort();
+    
+    // Filter out approved courses
+    const coursesToSchedule = sortedCourses
+      .filter(id => !this.approvedCourses.has(id));
+    
+    // Try to generate plan
+    const [success, finalPlan] = this.tryScheduleCourses(coursesToSchedule, initialPlan);
+    
+    // Identify assigned and unassigned courses
+    const assignedCourses = new Set(
+      Object.values(finalPlan)
+        .flat()
         .map(course => course.id)
     );
+    
+    const unassignedCourses = coursesToSchedule
+      .filter(id => !assignedCourses.has(id))
+      .map(id => this.courses.get(id));
 
-    const lockedCourses = this.originalCourses.filter(course => 
-      !course.approved && course.locked
-    );
-
-    const coursesToOptimize = this.originalCourses
-      .filter(course => !course.approved && !course.locked);
-
-    console.log('Initial state:', {
-      approved: Array.from(approvedCourses),
-      locked: lockedCourses.map(c => c.name),
-      toOptimize: coursesToOptimize.map(c => c.name)
-    });
-
-    const courseLevels = this.buildCourseLevels(coursesToOptimize, approvedCourses);
-
-    console.log('Course levels:', courseLevels.map(level => 
-      level.map(c => c.name)
-    ));
-
-    const termSchedules = {};
-    const scheduledCourses = [...lockedCourses];
-    const unscheduledCourses = [];
-
-    for (const termId of this.terms) {
-      termSchedules[termId] = {
-        courses: [],
-        totalHours: 0
-      };
+    if (unassignedCourses.length > 0) {
+      console.warn('Unassigned courses:', unassignedCourses);
     }
-
-    lockedCourses.forEach(course => {
-      if (course.termId) {
-        termSchedules[course.termId].courses.push({
-          id: course.id,
-          name: course.name,
-          schedule: course.selectedSchedule,
-          hours: course.hours
-        });
-        termSchedules[course.termId].totalHours += course.hours;
-      }
-    });
-
-    let currentTermIndex = 0;
-
-    for (const levelCourses of courseLevels) {
-      for (const course of levelCourses) {
-        let assigned = false;
-        let attemptedTerms = 0;
-
-        while (currentTermIndex < this.terms.length && !assigned && attemptedTerms < this.terms.length) {
-          const termId = this.terms[currentTermIndex];
-          const currentTermCourses = termSchedules[termId].courses;
-          const termHours = termSchedules[termId].totalHours;
-
-          if (currentTermCourses.length < 6 && 
-              termHours + course.hours <= this.preferences.maxHoursPerTerm) {
-            
-            const selectedSchedule = this.selectBestSchedule(course, currentTermCourses);
-            
-            if (selectedSchedule) {
-              const courseWithSchedule = {
-                ...course,
-                selectedSchedule
-              };
-
-              const hasConflict = currentTermCourses.some(tc => 
-                this.hasScheduleConflict(tc, courseWithSchedule)
-              );
-
-              if (!hasConflict) {
-                const [year, term] = termId.match(/(\d+)C(\d+)/).slice(1);
-                const assignedCourse = {
-                  ...course,
-                  selectedSchedule,
-                  termId,
-                  year: parseInt(year),
-                  term: parseInt(term)
-                };
-                
-                currentTermCourses.push({
-                  id: course.id,
-                  name: course.name,
-                  schedule: selectedSchedule,
-                  hours: course.hours
-                });
-                
-                termSchedules[termId].totalHours += course.hours;
-                scheduledCourses.push(assignedCourse);
-                assigned = true;
-              }
-            }
-          }
-
-          if (!assigned) {
-            currentTermIndex = (currentTermIndex + 1) % this.terms.length;
-            attemptedTerms++;
-          }
-        }
-
-        if (!assigned) {
-          unscheduledCourses.push({
-            ...course,
-            termId: null,
-            year: null,
-            term: null,
-            selectedSchedule: null
-          });
-        }
-      }
-    }
-
-    console.log('Optimization results:', {
-      scheduled: scheduledCourses.map(c => c.name),
-      unscheduled: unscheduledCourses.map(c => c.name)
-    });
 
     return {
-      courses: [...scheduledCourses, ...unscheduledCourses],
-      termSchedules,
-      unscheduledCourses
+      success,
+      plan: finalPlan,
+      unassignedCourses,
+      schedules: Object.fromEntries(this.chosenSchedules)
     };
   }
 }
 
-function optimizeCourseSchedule(courses, preferences = { preferredTime: 'day', maxHoursPerTerm: 384 }) {
-  const scheduler = new CourseScheduler(courses, preferences);
-  return scheduler.optimizeCourseSchedule();
+// Create stores
+export const coursesStore = writable(rawStudyPlan);
+export const selectedCoursesStore = writable([]);
+
+// Initialize selectedCoursesStore with all courses
+selectedCoursesStore.set(rawStudyPlan.map(course => ({
+  ...course,
+  approved: false,
+  selectedSchedule: null,
+  locked: false
+})));
+
+// Stats store
+export const statsStore = derived(selectedCoursesStore, $courses => ({
+  totalCourses: $courses.length,
+  totalApproved: $courses.filter(c => c.approved).length,
+  hoursPerTerm: $courses.reduce((acc, course) => {
+    const termId = `${course.year}C${course.term}`;
+    acc[termId] = (acc[termId] || 0) + course.hours;
+    return acc;
+  }, {})
+}));
+
+export function optimizeCourseSchedule(preferences) {
+  const scheduler = new CourseScheduler(preferences);
+  return scheduler.planCourses();
 }
 
 export default optimizeCourseSchedule;

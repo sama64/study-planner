@@ -32,6 +32,7 @@
     isDropping = false;
     const course = JSON.parse(event.dataTransfer.getData('text/plain'));
     
+   
     // Validation
     if (!validatePrerequisites(course, year, term, allSelectedCourses)) {
       const prereqsList = course.correlatives
@@ -50,6 +51,7 @@
       return;
     }
     
+            
     onDrop(course, year, term);
     error = '';
   }

@@ -3,8 +3,8 @@
   import DropZone from '$lib/components/DropZone.svelte';
   import ScheduleSelector from '$lib/components/ScheduleSelector.svelte';
   import IntensitySelector from '$lib/components/IntensitySelector.svelte';
-  import { classes, stats } from '$lib/stores/classes';
-  import { CourseScheduler } from '$lib/utils/courseScheduler';
+  import { selectedCoursesStore as classes, statsStore as stats } from '$lib/utils/courseScheduler';
+  import { optimizeCourseSchedule } from '$lib/utils/courseScheduler';
   import { configuration } from '$lib/stores/configuration';
 
   let currentYear = new Date().getFullYear();
@@ -26,7 +26,15 @@
   let error = '';
   
   function handleDrop(course, year, term) {
-    classes.addCourse(course, year, term);
+    classes.update(courses => {
+      const updatedCourse = { ...course, year, term };
+      const existingIndex = courses.findIndex(c => c.id === course.id);
+      if (existingIndex >= 0) {
+        courses[existingIndex] = updatedCourse;
+        return [...courses];
+      }
+      return [...courses, updatedCourse];
+    });
   }
 
   function handleError(event) {
@@ -39,60 +47,57 @@
   function handleOptimizeSchedule() {
     try {
       console.log('Starting optimization...');
-      const coursesArray = Array.from($classes);
-      console.log('Current courses:', coursesArray);
       
-      if (!coursesArray || coursesArray.length === 0) {
-        console.error('No courses found to optimize');
-        return;
-      }
-
       const preferences = {
         preferredTime: $configuration.preferredTime,
         maxHoursPerTerm: $configuration.maxHoursPerTerm
       };
       console.log('Optimization preferences:', preferences);
 
-      // Reset non-approved courses
-      const resetCourses = coursesArray.map(course => {
-        if (!course.approved) {
-          return {
-            ...course,
-            termId: null,
-            year: null,
-            term: null,
-            selectedSchedule: null,
-            locked: false
-          };
-        }
-        return course;
-      });
+      const result = optimizeCourseSchedule(preferences);
+      console.log('Optimization result:', result);
 
-      console.log('Reset courses:', resetCourses);
-      
-      // Initialize scheduler
-      const scheduler = new CourseScheduler(resetCourses, preferences);
-      console.log('Scheduler initialized');
-      
-      // Run optimization
-      const result = scheduler.optimizeCourseSchedule();
-      console.log('Optimization completed:', result);
-      
-      if (!result || !result.courses) {
-        console.error('Invalid optimization result');
-        return;
+      if (!result || !result.plan) {
+        throw new Error('Invalid optimization result');
       }
 
-      // Update store with results
-      result.courses.forEach(course => {
-        console.log('Updating course:', course);
-        classes.addCourse(course);
+      // Update courses with new assignments
+      classes.update(courses => {
+        const updatedCourses = [...courses];
+        
+        // Reset non-approved courses
+        updatedCourses.forEach(course => {
+          if (!course.approved) {
+            course.year = null;
+            course.term = null;
+            course.selectedSchedule = null;
+          }
+        });
+
+        // Apply new assignments from optimization
+        Object.entries(result.plan).forEach(([termId, termCourses]) => {
+          const [year, term] = termId.match(/(\d{4})C(\d)/).slice(1);
+          
+          termCourses.forEach(optimizedCourse => {
+            const courseIndex = updatedCourses.findIndex(c => c.id === optimizedCourse.id);
+            if (courseIndex >= 0 && !updatedCourses[courseIndex].approved) {
+              updatedCourses[courseIndex] = {
+                ...updatedCourses[courseIndex],
+                year: parseInt(year),
+                term: parseInt(term),
+                selectedSchedule: result.schedules[optimizedCourse.id]
+              };
+            }
+          });
+        });
+
+        return updatedCourses;
       });
 
-      if (result.unscheduledCourses?.length > 0) {
-        console.warn('Unscheduled courses:', result.unscheduledCourses);
-        error = `No se pudieron programar ${result.unscheduledCourses.length} materias`;
+      if (result.unassignedCourses?.length > 0) {
+        error = `No se pudieron programar ${result.unassignedCourses.length} materias`;
       }
+
     } catch (err) {
       console.error('Optimization error:', err);
       error = `Error en la optimización: ${err.message}`;
@@ -100,7 +105,7 @@
   }
 
   $: getCoursesForTerm = (year, term) => 
-    $classes.filter(c => c.year === year && c.term === term && c.approved === false);
+    $classes.filter(c => c.year === year && c.term === term && !c.approved);
 </script>
 
 <div class="container mx-auto p-4 space-y-6">
@@ -139,12 +144,22 @@
           <div class="grid grid-cols-1 gap-3 max-h-[calc(100vh-300px)] overflow-y-auto pr-2">
             {#each $classes as course}
               <CourseCard 
-              {course} 
-              onToggleApproved={(id) => classes.toggleApproved(id)}
-              on:scheduleChange={(event) => {
-                const { courseId, schedule } = event.detail;
-                classes.addCourse({ ...course, selectedSchedule: schedule });
-              }}
+                {course} 
+                onToggleApproved={(id) => {
+                  classes.update(courses => 
+                    courses.map(c => 
+                      c.id === id ? {...c, approved: !c.approved} : c
+                    )
+                  );
+                }}
+                on:scheduleChange={(event) => {
+                  const { courseId, schedule } = event.detail;
+                  classes.update(courses =>
+                    courses.map(c =>
+                      c.id === courseId ? {...c, selectedSchedule: schedule} : c
+                    )
+                  );
+                }}
               />
             {/each}
           </div>
@@ -160,34 +175,45 @@
           <div class="card bg-base-200 p-3 px-20 flex flex-row items-center">
             <div class="flex flex-row items-center">
               Preferred <br> Schedule
-            <ScheduleSelector />
+              <ScheduleSelector />
             </div>
             <div class="flex flex-row items-center ml-12">
               Intensity
               <IntensitySelector />
             </div>
-            <button class="btn btn-primary ml-20" on:click={handleOptimizeSchedule}>Optimize</button>
+            <button class="btn btn-primary ml-20" on:click={handleOptimizeSchedule}>
+              Optimize
+            </button>
           </div>
           <div class="divider"></div>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {#each yearTermList as { year, term }}
-
               <DropZone
                 {year}
                 {term}
                 courses={getCoursesForTerm(year, term)}
                 allSelectedCourses={$classes}
                 onDrop={handleDrop}
-                onRemove={(id) => classes.removeCourse(id)}
-                onToggleApproved={(id) => classes.toggleApproved(id)}
+                onRemove={(id) => {
+                  classes.update(courses =>
+                    courses.map(c =>
+                      c.id === id ? {...c, year: null, term: null} : c
+                    )
+                  );
+                }}
+                onToggleApproved={(id) => {
+                  classes.update(courses =>
+                    courses.map(c =>
+                      c.id === id ? {...c, approved: !c.approved} : c
+                    )
+                  );
+                }}
                 on:error={handleError}
               />
-
             {/each}
           </div>
         </div>
       </div>
     </div>
-
   </div>
 </div>
